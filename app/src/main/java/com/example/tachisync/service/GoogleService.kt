@@ -1,7 +1,5 @@
 package com.example.tachisync.service
 
-import android.content.ContentResolver
-import android.content.ContentResolver.MimeTypeInfo
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -13,16 +11,13 @@ import com.example.tachisync.data.SettingsViewModel
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
+import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
-import io.ktor.client.utils.EmptyContent.contentLength
-import io.ktor.client.utils.EmptyContent.contentType
 import io.ktor.http.*
 import io.ktor.http.cio.*
+import io.ktor.util.*
 import kotlinx.coroutines.*
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.encodeToJsonElement
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.*
 import java.sql.Time
 import java.time.Instant
 
@@ -47,13 +42,12 @@ public class GoogleService {
         }
 
         fun GetDriveRefreshTokenAndAccessToken(authorizationCode: String, context: Context, sharedViewModel: SettingsViewModel) {
-            GlobalScope.launch {
+            GlobalScope.launch(Dispatchers.Main) {
                 val response: HttpResponse = client.request(
                     "https://oauth2.googleapis.com/token" +
                             "?code=${authorizationCode}}" +
                             "&redirect_uri=com.example.tachisync:/callback" +
                             "&client_id=213487956564-b79if896fihvd8v2vljlmt0qq7pj37am.apps.googleusercontent.com" +
-                            //"&client_secret=************" +
                             "&scope=" +
                             "&grant_type=authorization_code"
                 ) {
@@ -62,7 +56,7 @@ public class GoogleService {
                 if(response.status.value in 200..299) {
                     val stringBody: String = response.bodyAsText()
                     val jsonObject = Json.parseToJsonElement(stringBody).jsonObject
-                    val accessToken = jsonObject["access_token"]
+                    accessToken = jsonObject["access_token"].toString()
                     val refresh_token = jsonObject["refresh_token"]
                     val expireIn = jsonObject["expires_in"]
                     tokenExpiration = Time.from(Instant.now().plusSeconds(expireIn.toString().toLong()))
@@ -74,62 +68,40 @@ public class GoogleService {
         }
 
         //TODO: test if this method returns a value
-        suspend fun ResetAuthorizationWithRefreshToken(context: Context, sharedViewModel: SettingsViewModel) = GlobalScope.async(Dispatchers.Main) {
-            if (accessToken == "" && tokenExpiration.before(Time.from(Instant.now()))) {
-                if (sharedViewModel.driveRefreshToken != null) {
-                    GlobalScope.launch {
-                        val response: HttpResponse = client.request(
-                            "https://oauth2.googleapis.com" +
-                                    "?grant_type=refresh_token" +
-                                    "&${sharedViewModel.driveRefreshToken}"
-                        ) {
-                            method = HttpMethod.Post
-                        }
-                        if (response.status.value in 200..299) {
-                            val stringBody: String = response.bodyAsText()
-                            val jsonObject = Json.parseToJsonElement(stringBody).jsonObject
-                            val token = jsonObject["access_token"]
-                            val expireIn = jsonObject["expires_in"]
-                            tokenExpiration =
-                                Time.from(Instant.now().plusSeconds(expireIn.toString().toLong()))
-                            accessToken = token.toString()
-                            true
-                        }
-                    }
-                } else {
+        @OptIn(InternalAPI::class)
+        suspend fun CheckForValidAuthentication(context: Context, sharedViewModel: SettingsViewModel): Boolean = withContext(Dispatchers.Main) {
+            if (accessToken == "" || tokenExpiration.before(Time.from(Instant.now()))) {
                     Toast.makeText(
                         context,
                         "Please Authorize Google Drive Access First.",
                         Toast.LENGTH_LONG
                     ).show()
-
-                    false
+                    return@withContext false
                 }
-            }
+            return@withContext true
         }
 
-        suspend fun VerifyAndCreateDriveFolders(context: Context, sharedViewModel: SettingsViewModel): String = withContext(Dispatchers.Default) {
-            var directorySegments = sharedViewModel.driveDirectory.toString().split("\"")
-            val one = ResetAuthorizationWithRefreshToken(context,sharedViewModel).await()
+        suspend fun VerifyAndCreateDriveFolders(context: Context, sharedViewModel: SettingsViewModel): String = withContext(Dispatchers.Main) {
+            var directorySegments = sharedViewModel.driveDirectory.value.toString().split("/")
+            val one = CheckForValidAuthentication(context,sharedViewModel)
             //TODO: see if this is actually returning a bool
-            if(one as Boolean) {
+            if(one) {
                 var parentId = ""
-                val success = async { withContext(Dispatchers.Default) {
+                val success = withContext(Dispatchers.Main) {
                     for (segment in directorySegments) {
-                        val response: HttpResponse = client.request(
+                        val response: HttpResponse = client.get(
                             "https://www.googleapis.com/drive/v3/files" +
-                                    "?q=name='${segment}'and mimeType='application/vnd.google-apps.folder'" +
-                                    "&fields=files(id,name,parents,mimeType)"
+                                    "?fields=files(id,name,parents,mimeType)" +
+                                    "&q=name='Backup'+and+mimeType='application%2Fvnd.google-apps.folder'"
                         ) {
-                            method = HttpMethod.Post
-                            headers {
-                                bearerAuth(accessToken)
-                                contentType(ContentType.Any)
-                            }
+                            bearerAuth(accessToken)
                         }
+                        var uri = response.call.request.url.toURI()
+                        var string = response.call.request.url.toString()
+                        var temp = uri.toString() + string
                         if (response.status.value in 200..299) {
                             val stringBody: String = response.bodyAsText()
-                            val jsonArray = Json.parseToJsonElement(stringBody).jsonArray
+                            val jsonArray = Json.parseToJsonElement(stringBody).jsonObject["files"]?.jsonArray!!
                             if(jsonArray.isNotEmpty()) {
                                 val jsonObject = jsonArray[0].jsonObject
                                 if(parentId != "" && parentId != jsonObject["Parent"].toString()) {
@@ -146,7 +118,7 @@ public class GoogleService {
                         }
                     }
                     return@withContext true
-                } } as Boolean
+                } as Boolean
                 if(success) {
                     return@withContext parentId
                 }

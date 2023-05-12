@@ -42,7 +42,7 @@ val Context.settings: DataStore<Preferences> by preferencesDataStore(
 )
 val ANDROID_DIRECTORY = stringPreferencesKey("andriod_directory")
 val READABLE_ANDROID_DIRECTORY = stringPreferencesKey("readable_android_directory")
-val DRIVE_DIRECTORY = stringPreferencesKey("andriod_directory")
+val DRIVE_DIRECTORY = stringPreferencesKey("drive_directory")
 val REFRESH_TOKEN = stringPreferencesKey("refresh_token")
 
 class MainActivity : AppCompatActivity() {
