@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <data>
+        <variable
+            name="Settings"
+            type="com.example.tachisync.data.SettingsViewModel" />
+        <variable
+            name="ViewModel"
+            type="com.example.tachisync.MainActivity" />
+    </data>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="16dp"
+        tools:context=".MainActivity">
+
+
+        <TextView
+            android:id="@+id/google_path_string"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Google Drive"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="@id/google_authorize_button"
+            app:layout_constraintBottom_toBottomOf="@id/google_authorize_button"/>
+
+        <Button
+            android:id="@+id/google_authorize_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Authorize"
+            android:onClick="@{() -> ViewModel.Authorize()}"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/google_path_textbox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintTop_toBottomOf="@id/google_authorize_button">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/google_path_textbox_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:imeActionId="6"
+                android:imeOptions="actionDone"
+                android:imeActionLabel="actionDone"
+                android:inputType="text"
+                android:maxLines="1"
+                android:text="@{Settings.driveDirectory}"
+                android:hint="Directory" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:id="@+id/android_path_string"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Android"
+            android:gravity="center"
+            app:layout_constraintBottom_toBottomOf="@id/select_directory"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="@+id/select_directory" />
+
+        <Button
+            android:id="@+id/select_directory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="30dp"
+            android:text="Select Directory"
+            android:onClick="@{() -> ViewModel.SelectDirectory()}"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/google_path_textbox" />
+
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/android_directory_textbox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintTop_toBottomOf="@id/select_directory"
+            app:layout_constraintStart_toStartOf="parent">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@{Settings.readableAndroidDirectory}"
+                android:hint="Directory" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+
+        <Button
+            android:id="@+id/download_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="download"
+            android:onClick="@{() -> ViewModel.download()}"
+            app:layout_constraintHorizontal_bias=".75"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintVertical_bias=".5"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+        <Button
+            android:id="@+id/upload_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="upload"
+            android:onClick="@{() -> ViewModel.upload()}"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias=".25"
+            app:layout_constraintVertical_bias=".5"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</layout>
