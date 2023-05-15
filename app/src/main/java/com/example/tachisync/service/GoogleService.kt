@@ -7,7 +7,9 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat.startActivity
 import androidx.core.net.toFile
 import androidx.documentfile.provider.DocumentFile
+import com.example.tachisync.data.FileData
 import com.example.tachisync.data.SettingsViewModel
+import com.example.tachisync.data.TokenResponseData
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -17,6 +19,7 @@ import io.ktor.http.*
 import io.ktor.http.cio.*
 import io.ktor.util.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.NonDisposableHandle.parent
 import kotlinx.serialization.json.*
 import java.sql.Time
 import java.time.Instant
@@ -56,11 +59,10 @@ public class GoogleService {
                 if(response.status.value in 200..299) {
                     val stringBody: String = response.bodyAsText()
                     val jsonObject = Json.parseToJsonElement(stringBody).jsonObject
-                    accessToken = jsonObject["access_token"].toString()
-                    val refresh_token = jsonObject["refresh_token"]
-                    val expireIn = jsonObject["expires_in"]
-                    tokenExpiration = Time.from(Instant.now().plusSeconds(expireIn.toString().toLong()))
-                    sharedViewModel.driveRefreshToken = refresh_token.toString()
+                    val tokenData = TokenResponseData(jsonObject)
+                    accessToken = tokenData.accessToken
+                    tokenExpiration = Time.from(Instant.now().plusSeconds(tokenData.expiresIn.toLong()))
+                    sharedViewModel.driveRefreshToken = tokenData.refreshToken
                     sharedViewModel.setPreferences_async(context)
                     Toast.makeText(context,"Authorization Successful", Toast.LENGTH_LONG).show()
                 }
@@ -97,24 +99,18 @@ public class GoogleService {
                         ) {
                             bearerAuth(accessToken)
                         }
-                        var uri = response.call.request.url.toURI()
-                        var string = response.call.request.url.toString()
-                        var temp = uri.toString() + string
                         if (response.status.value in 200..299) {
                             val stringBody: String = response.bodyAsText()
                             val jsonArray = Json.parseToJsonElement(stringBody).jsonObject["files"]?.jsonArray!!
                             if(jsonArray.isNotEmpty()) {
-                                val json = jsonArray[0].jsonObject
-                                val jsonParentsArray= json["parents"]!!.jsonArray
-                                val id = json["id"].toString()
-                                val parent = jsonParentsArray[0].toString()
-                                if(parentId != "" && parentId != parent) {
-                                    parentId = parent // so new folder has proper parent id
+                                val file: FileData = FileData(jsonArray[0].jsonObject)
+                                if(parentId != "" && parentId != file.parent) {
+                                    parentId = file.parent // so new folder has proper parent id
                                     //TODO: Create Folder and set parent id
                                     Toast.makeText(context,"Folder Path doesn't exist", Toast.LENGTH_LONG).show()
                                     return@withContext false
                                 } else {
-                                    parentId = id
+                                    parentId = file.id
                                 }
                             } else {
                                 //TODO: Create Folder and set parent id
@@ -147,30 +143,32 @@ public class GoogleService {
                     }
                 }
                 if(ListResponse.status.value in 200..299) {
-                    val files = Json.parseToJsonElement(ListResponse.bodyAsText()).jsonObject
-                    val fileArray = Json.parseToJsonElement(ListResponse.bodyAsText()).jsonArray
-                    if(fileArray.isNotEmpty()) {
-                        val file = fileArray[0].jsonObject
-                        if(!file["id"].toString().isNullOrBlank()) {
-                            val id = file["id"].toString()
+                    val fileObject = Json.parseToJsonElement(ListResponse.bodyAsText()).jsonObject
+                    val files = fileObject["files"]?.jsonArray!!
+                    if(files.isNotEmpty()) {
+                        val file = FileData(files[0].jsonObject)
+                        if(!file.id.isNullOrBlank()) {
                             val fileResponse : HttpResponse = client.request(
-                                "https://www.googleapis.com/drive/v3/files/${id.replace("","")}" +
+                                "https://www.googleapis.com/drive/v3/files/${file.id.replace("\"","")}" +
                                         "?alt=media"
                             )  {
-                                method = HttpMethod.Post
+                                method = HttpMethod.Get
                                 headers {
                                     bearerAuth(accessToken)
                                 }
                             }
-                            val fileBytes = fileResponse.readBytes()
-                            val file = directory.createFile("", jsonObject["name"].toString())
-                            file?.uri?.toFile()?.writeBytes(fileBytes)
+                            if(fileResponse.status.value in 200 .. 299) {
+                                val fileBytes = fileResponse.readBytes()
+                                val androidFile = directory.createFile(file.mimeType, file.name)
+                                val stream =
+                                    context.contentResolver.openOutputStream(androidFile!!.uri)
+                                stream?.write(fileBytes)
+                                Toast.makeText(context,"File Created", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 } else {
-                    val body = ListResponse.bodyAsText()
-                    Toast.makeText(context,"File Does Not Exist", Toast.LENGTH_LONG).show()
-                    val temp = body
+                    Toast.makeText(context,"File Does Not Exist", Toast.LENGTH_SHORT).show()
                 }
             }
         }
