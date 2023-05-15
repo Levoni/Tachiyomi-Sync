@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun download() {
-        GlobalScope.launch {
+        GlobalScope.launch(Dispatchers.Main) {
             DownloadBackup()
         }
     }

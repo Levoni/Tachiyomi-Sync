@@ -89,10 +89,11 @@ public class GoogleService {
                 var parentId = ""
                 val success = withContext(Dispatchers.Main) {
                     for (segment in directorySegments) {
+                        val urlString = "https://www.googleapis.com/drive/v3/files" +
+                                "?fields=files(id,name,parents,mimeType)" +
+                                "&q=name='${segment}'+and+mimeType='application%2Fvnd.google-apps.folder'"
                         val response: HttpResponse = client.get(
-                            "https://www.googleapis.com/drive/v3/files" +
-                                    "?fields=files(id,name,parents,mimeType)" +
-                                    "&q=name='Backup'+and+mimeType='application%2Fvnd.google-apps.folder'"
+                            urlString
                         ) {
                             bearerAuth(accessToken)
                         }
@@ -103,12 +104,17 @@ public class GoogleService {
                             val stringBody: String = response.bodyAsText()
                             val jsonArray = Json.parseToJsonElement(stringBody).jsonObject["files"]?.jsonArray!!
                             if(jsonArray.isNotEmpty()) {
-                                val jsonObject = jsonArray[0].jsonObject
-                                if(parentId != "" && parentId != jsonObject["Parent"].toString()) {
-                                    parentId = jsonObject["Parent"].toString() // so new folder has proper parent id
+                                val json = jsonArray[0].jsonObject
+                                val jsonParentsArray= json["parents"]!!.jsonArray
+                                val id = json["id"].toString()
+                                val parent = jsonParentsArray[0].toString()
+                                if(parentId != "" && parentId != parent) {
+                                    parentId = parent // so new folder has proper parent id
                                     //TODO: Create Folder and set parent id
                                     Toast.makeText(context,"Folder Path doesn't exist", Toast.LENGTH_LONG).show()
                                     return@withContext false
+                                } else {
+                                    parentId = id
                                 }
                             } else {
                                 //TODO: Create Folder and set parent id
@@ -129,25 +135,26 @@ public class GoogleService {
 
         suspend fun DownloadDriveFile(parentId: String, directory: DocumentFile, context: Context, sharedViewModel: SettingsViewModel) {
             if(!parentId.isNullOrBlank()) {
+                val urlString = "https://www.googleapis.com/drive/v3/files" +
+                        "?q=parents+in+'${parentId.replace("\"","")}'" +
+                        "&fields=files(id,name,parents,mimeType)"
                 val ListResponse: HttpResponse = client.request(
-                    "https://www.googleapis.com/drive/v3/files" +
-                            "?q=parents='${parentId}'and mimeType='application/vnd.google-apps.folder'" +
-                            "&fields=files(id,name,parents,mimeType)"
+                    urlString
                 ) {
-                    method = HttpMethod.Post
+                    method = HttpMethod.Get
                     headers {
                         bearerAuth(accessToken)
-                        contentType(ContentType.Any)
                     }
                 }
                 if(ListResponse.status.value in 200..299) {
-                    val jsonArray = Json.parseToJsonElement(ListResponse.bodyAsText()).jsonArray
-                    if(jsonArray.isNotEmpty()) {
-                        val jsonObject = jsonArray[0].jsonObject
-                        if(!jsonObject["id"].toString().isNullOrBlank()) {
-                            val id = jsonObject["id"].toString()
+                    val files = Json.parseToJsonElement(ListResponse.bodyAsText()).jsonObject
+                    val fileArray = Json.parseToJsonElement(ListResponse.bodyAsText()).jsonArray
+                    if(fileArray.isNotEmpty()) {
+                        val file = fileArray[0].jsonObject
+                        if(!file["id"].toString().isNullOrBlank()) {
+                            val id = file["id"].toString()
                             val fileResponse : HttpResponse = client.request(
-                                "https://www.googleapis.com/drive/v3/files/${id}" +
+                                "https://www.googleapis.com/drive/v3/files/${id.replace("","")}" +
                                         "?alt=media"
                             )  {
                                 method = HttpMethod.Post
@@ -161,7 +168,9 @@ public class GoogleService {
                         }
                     }
                 } else {
+                    val body = ListResponse.bodyAsText()
                     Toast.makeText(context,"File Does Not Exist", Toast.LENGTH_LONG).show()
+                    val temp = body
                 }
             }
         }
